@@ -334,7 +334,7 @@ mod test_matriz {
                 .678.
                 .....
         */
-        let mut my_matriz = Matriz::new(5, 5);
+        let my_matriz = Matriz::new(5, 5);
         assert_eq!(my_matriz.get_coords_adjacent_at((2, 2)), vec![(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]);
     }
 
@@ -343,7 +343,7 @@ mod test_matriz {
         /*
                 4x5
         */
-        let mut my_matriz = Matriz::new(1, 3);
+        let my_matriz = Matriz::new(1, 3);
         assert_eq!(my_matriz.get_coords_adjacent_at((0, 1)), vec![(0,-1), (0,1)]);
     }
 }
