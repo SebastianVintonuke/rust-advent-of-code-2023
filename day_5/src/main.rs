@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 
-const IS_SECOND_PART: bool = false;
+const IS_SECOND_PART: bool = true;
 fn main() {
     let file_name = "./src/input.txt";
 
@@ -55,9 +55,18 @@ fn main() {
                 for n_and_start in seeds.iter().step_by(2).enumerate() {
                     ranges.push((n_and_start.1.to_owned(), n_and_start.1.to_owned() + seeds[(n_and_start.0 * 2) + 1]));
                 }
+
+                let mut results: Vec<(u64, u64)> = vec![];
+                for range_seeds in ranges.iter() {
+                    let mut range_locations = vec![range_seeds.clone()];
+                    for category in categories.iter() {
+                        range_locations = category.result_by_ranges(range_locations);
+                    }
+                    results.extend(range_locations);
+                }
+                results.sort_by(|a, b| a.0.cmp(&b.0));
                 
-                
-                let lowest_location: u64 = 0;
+                let lowest_location: u64 = results[0].0;
                 println!("The lowest location number that corresponds to any of the initial seeds is: {}", lowest_location);
             } else {
                 let mut locations: Vec<u64> = vec![];
@@ -89,8 +98,6 @@ where P: AsRef<Path>, {
     Ok(io::BufReader::new(file).lines())
 }
 
-#[warn(dead_code)]
-#[warn(unused_variables)]
 #[derive(Debug)]
 struct CategoryMap {
     source: String,
@@ -119,6 +126,34 @@ impl CategoryMap {
             }
         }
         return source
+    }
+
+    fn result_by_ranges(&self, ranges: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
+        let mut result: Vec<(u64, u64)> = vec![];
+        for range in ranges.iter() {
+            result.extend(self.result_by_range_recursive(range.clone()));
+        }
+        return result
+    }
+
+    fn result_by_range_recursive(&self, range: (u64, u64)) -> Vec<(u64, u64)> {
+        let mut results: Vec<(u64, u64)> = vec![];
+
+        for internal_map in self.maps.iter() {
+            if internal_map.is_able_to_resolve_a_part_of(range) {
+                let (partial_result, remains) = internal_map.result_range_and_remains(range);
+
+                results.push(partial_result);
+
+                for remain in remains.iter() {
+                    results.extend(self.result_by_range_recursive(remain.clone()));
+                }
+
+                return results
+            }
+        }
+
+        return vec![range]
     }
 
 }
@@ -166,6 +201,19 @@ mod test_category_map {
         let my_seed_to_soil_map = initialize_seed_to_soil_map();
         assert_eq!(my_seed_to_soil_map.result(51), 53);
     }
+
+    #[test]
+    fn test_mapped_by_range() {
+        let my_seed_to_soil_map = initialize_seed_to_soil_map();
+
+        let mut expected = vec![(1, 49), (52, 53), (98, 99), (50, 51), (100, 101)];
+        expected.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut result = my_seed_to_soil_map.result_by_ranges(vec![(1, 51), (96, 101)]);
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+
+        assert_eq!(result, expected);
+    }
 }
 
 #[derive(Debug)]
@@ -174,6 +222,17 @@ struct InternalMap {
     source_range_end: u64,
     destination_range_start: u64,
     destination_range_end: u64
+}
+
+impl Clone for InternalMap {
+    fn clone(&self) -> Self {
+        Self {
+            source_range_start: self.source_range_start.clone(),
+            source_range_end: self.source_range_end.clone(),
+            destination_range_start: self.destination_range_start.clone(),
+            destination_range_end: self.destination_range_end.clone(),
+        }
+    }
 }
 
 impl InternalMap {
@@ -206,6 +265,34 @@ impl InternalMap {
         if self.is_on_range(source) {
             return self.destination_range_start + (source - self.source_range_start); 
         } else {
+            panic!("out of range source: {}", source);
+        }
+    }
+
+    fn is_able_to_resolve_a_part_of(&self, range: (u64, u64)) -> bool {
+        return !((range.1 < self.source_range_start) || (self.source_range_end < range.0))
+    }
+
+    fn result_range_and_remains(&self, range: (u64, u64)) -> ((u64, u64), Vec<(u64, u64)>) {
+        if self.is_able_to_resolve_a_part_of(range) {
+            if (self.source_range_start <= range.0) && (range.1 <= self.source_range_end) {
+                let result: (u64, u64) = (self.result(range.0), self.result(range.1));
+                let remains: Vec<(u64, u64)> = vec![];
+                return (result, remains)
+            } else if (range.0 <= self.source_range_start) && (self.source_range_start <= range.1) && (range.1 < self.source_range_end) {
+                let result: (u64, u64) = (self.result(self.source_range_start), self.result(range.1));
+                let remains: Vec<(u64, u64)> = vec![(range.0, self.source_range_start - 1)];
+                return (result, remains)
+            } else if (self.source_range_start <= range.0) && (range.0 <= self.source_range_end) && (self.source_range_end < range.1) {
+                let result: (u64, u64) = (self.result(range.0), self.result(self.source_range_end));
+                let remains: Vec<(u64, u64)> = vec![(self.source_range_end + 1, range.1)];
+                return (result, remains)
+            } else {
+                let result: (u64, u64) = (self.result(self.source_range_start), self.result(self.source_range_end));
+                let remains: Vec<(u64, u64)> = vec![(range.0, self.source_range_start - 1), (self.source_range_end + 1, range.1)];
+                return (result, remains)
+            }
+        } else {
             panic!("out of range");
         }
     }
@@ -217,6 +304,27 @@ mod test_internal_map {
 
     fn initialize_seed_to_soil_internal_map() -> InternalMap {
         return InternalMap::new(String::from("50 98 2"));
+    }
+
+    #[test]
+    fn result_range_and_remains() {
+        let my_seed_to_soil_map = InternalMap::new(String::from("20 10 6"));
+        assert_eq!(my_seed_to_soil_map.result_range_and_remains((10, 15)), ((20, 25), vec![]));
+        assert_eq!(my_seed_to_soil_map.result_range_and_remains((11, 14)), ((21, 24), vec![]));
+        assert_eq!(my_seed_to_soil_map.result_range_and_remains((5, 12)), ((20, 22), vec![(5, 9)]));
+        assert_eq!(my_seed_to_soil_map.result_range_and_remains((13, 20)), ((23, 25), vec![(16, 20)]));
+        assert_eq!(my_seed_to_soil_map.result_range_and_remains((5, 20)), ((20, 25), vec![(5, 9), (16, 20)]));
+    }
+    
+    #[test]
+    fn is_able_to_resolve_a_part_of() {
+        let my_seed_to_soil_map = initialize_seed_to_soil_internal_map();
+        assert_eq!(my_seed_to_soil_map.is_able_to_resolve_a_part_of((96, 97)), false);
+        assert_eq!(my_seed_to_soil_map.is_able_to_resolve_a_part_of((97, 98)), true);
+        assert_eq!(my_seed_to_soil_map.is_able_to_resolve_a_part_of((98, 99)), true);
+        assert_eq!(my_seed_to_soil_map.is_able_to_resolve_a_part_of((99, 100)), true);
+        assert_eq!(my_seed_to_soil_map.is_able_to_resolve_a_part_of((100, 101)), false);
+        assert_eq!(my_seed_to_soil_map.is_able_to_resolve_a_part_of((96, 101)), true);
     }
 
     #[test]
