@@ -100,21 +100,21 @@ where P: AsRef<Path>, {
 
 #[derive(Debug)]
 struct CategoryMap {
-    source: String,
-    destination: String,
+    _source: String,
+    _destination: String,
     maps: Vec<InternalMap>
 }
 
 impl CategoryMap {
-    fn new(source: String, destination: String, descriptions: Vec<String>) -> Self {
+    fn new(_source: String, _destination: String, descriptions: Vec<String>) -> Self {
         let mut maps: Vec<InternalMap> = vec![];
         for description in descriptions.iter() {
             maps.push(InternalMap::new(description.to_string()));
         }
 
         CategoryMap {
-            source,
-            destination,
+            _source,
+            _destination,
             maps
         }
     }
